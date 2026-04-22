@@ -46,18 +46,26 @@ async function handleRegister(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, email, dob, role, password })
         });
-        const data = await response.json();
+        const contentType = response.headers.get("content-type");
+        let data;
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            data = await response.json();
+        } else {
+            const text = await response.text();
+            console.error('Non-JSON response received:', text);
+            throw new Error('Server error: check Vercel logs for details.');
+        }
 
         if (response.ok) {
             alert('Registration successful! Please login.');
             toggleAuth();
         } else {
             console.error('Server error:', data);
-            alert(data.error || 'Registration failed. Check console for details.');
+            alert(data.error || 'Registration failed. Please check Vercel environment variables.');
         }
     } catch (err) {
-        console.error('Network or frontend error:', err);
-        alert('Registration failed. Please check your connection.');
+        console.error('Frontend error:', err);
+        alert(err.message || 'Registration failed. Check console for details.');
     }
 }
 
