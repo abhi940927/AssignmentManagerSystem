@@ -8,7 +8,7 @@ import path from 'path';
 import authRoutes from './routes/auth';
 import assignmentRoutes from './routes/assignments';
 import submissionRoutes from './routes/submissions';
-import { setIO } from './services/cron'; // Fixed: no circular import
+import { setIO } from './services/cron';
 
 dotenv.config();
 
@@ -21,8 +21,28 @@ const io = new Server(httpServer, {
 const PORT = process.env.PORT || 8080;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/assignment_db';
 
+// DB Connection Utility
+const connectDB = async () => {
+    if (mongoose.connection.readyState >= 1) return;
+    try {
+        await mongoose.connect(MONGO_URI);
+        console.log('✅ MongoDB connected');
+    } catch (err) {
+        console.error('❌ MongoDB connection error:', err);
+    }
+};
+
+// Middleware
 app.use(cors());
 app.use(express.json());
+
+// Ensure DB is connected for every request (crucial for Vercel)
+app.use(async (req, res, next) => {
+    await connectDB();
+    next();
+});
+
+// Serve static files
 app.use(express.static(path.join(__dirname, '../public')));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -34,31 +54,24 @@ app.use('/api/submissions', submissionRoutes);
 // Socket.io connection handling
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
-
     socket.on('join', (userId: string) => {
         socket.join(userId);
-        console.log(`User ${userId} joined room`);
     });
-
     socket.on('disconnect', () => {
         console.log('User disconnected');
     });
 });
 
-// Attach io to app for use in routes
+// Attach io to app and services
 app.set('socketio', io);
-
-// Pass io to cron service (fixes circular dependency)
 setIO(io);
 
-mongoose.connect(MONGO_URI)
-    .then(() => {
-        console.log('✅ MongoDB connected');
-        httpServer.listen(PORT, () => {
-            console.log(`🚀 Server running on http://localhost:${PORT}`);
-        });
-    })
-    .catch(err => console.error('❌ MongoDB error:', err));
+// Start server locally
+if (process.env.NODE_ENV !== 'production') {
+    httpServer.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+}
 
 // Export for Vercel
 export default app;
