@@ -40,6 +40,7 @@ async function handleRegister(e) {
     const password = document.getElementById('reg-password').value;
 
     try {
+        console.log('Sending registration request...');
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -51,11 +52,12 @@ async function handleRegister(e) {
             alert('Registration successful! Please login.');
             toggleAuth();
         } else {
-            alert(data.error);
+            console.error('Server error:', data);
+            alert(data.error || 'Registration failed. Check console for details.');
         }
     } catch (err) {
-        console.error(err);
-        alert('Registration failed');
+        console.error('Network or frontend error:', err);
+        alert('Registration failed. Please check your connection.');
     }
 }
 

@@ -59,3 +59,6 @@ mongoose.connect(MONGO_URI)
         });
     })
     .catch(err => console.error('❌ MongoDB error:', err));
+
+// Export for Vercel
+export default app;

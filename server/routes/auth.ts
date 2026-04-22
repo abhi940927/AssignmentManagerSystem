@@ -8,12 +8,30 @@ const router = express.Router();
 router.post('/register', async (req: any, res: any) => {
     try {
         const { name, email, password, dob, role } = req.body;
+        console.log('Registration attempt:', { name, email, dob, role });
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            console.log('User already exists:', email);
+            return res.status(400).json({ error: 'Email already registered' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = new User({ name, email, password: hashedPassword, dob, role });
+        const user = new User({ 
+            name, 
+            email, 
+            password: hashedPassword, 
+            dob: new Date(dob), // Ensure it's a Date object
+            role 
+        });
+        
         await user.save();
-        res.status(201).json({ message: 'User registered' });
+        console.log('User registered successfully');
+        res.status(201).json({ message: 'User registered successfully' });
     } catch (err: any) {
-        res.status(400).json({ error: err.message });
+        console.error('Registration error detail:', err);
+        res.status(400).json({ error: err.message || 'Registration failed' });
     }
 });
 
