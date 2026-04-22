@@ -1,4 +1,5 @@
 {
+  "_comment": "Vercel Deployment Configuration",
   "version": 2,
   "builds": [
     {
