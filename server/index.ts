@@ -14,9 +14,31 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: { origin: '*' }
-});
+
+// Defensive Socket.io initialization for Vercel
+let io: any;
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL) {
+    try {
+        io = new Server(httpServer, {
+            cors: { origin: '*' }
+        });
+        
+        io.on('connection', (socket: any) => {
+            console.log('User connected:', socket.id);
+            socket.on('join', (userId: string) => {
+                socket.join(userId);
+            });
+            socket.on('disconnect', () => {
+                console.log('User disconnected');
+            });
+        });
+
+        app.set('socketio', io);
+        setIO(io);
+    } catch (err) {
+        console.error('Socket.io initialization skipped or failed:', err);
+    }
+}
 
 const PORT = process.env.PORT || 8080;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/assignment_db';
@@ -25,10 +47,12 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/assignment
 const connectDB = async () => {
     if (mongoose.connection.readyState >= 1) return;
     try {
+        if (!MONGO_URI) throw new Error('MONGO_URI is not defined');
         await mongoose.connect(MONGO_URI);
         console.log('✅ MongoDB connected');
     } catch (err) {
         console.error('❌ MongoDB connection error:', err);
+        throw err; // Rethrow to catch in middleware
     }
 };
 
@@ -39,18 +63,12 @@ app.use(express.json());
 // Ensure DB is connected for every request (crucial for Vercel)
 app.use(async (req, res, next) => {
     try {
-        if (mongoose.connection.readyState < 1) {
-            if (!MONGO_URI || MONGO_URI.includes('localhost')) {
-                console.error('❌ Invalid MONGO_URI for production');
-                // Don't block the request here, let the route handle the DB failure
-            } else {
-                await connectDB();
-            }
-        }
+        await connectDB();
         next();
-    } catch (err) {
-        console.error('Middleware DB Error:', err);
-        next(); // Still proceed to let the route handle it or fail gracefully
+    } catch (err: any) {
+        console.error('Database middleware error:', err.message);
+        // If DB fails, we still let the request through but routes will fail gracefully
+        next();
     }
 });
 
@@ -62,21 +80,6 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/submissions', submissionRoutes);
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
-    socket.on('join', (userId: string) => {
-        socket.join(userId);
-    });
-    socket.on('disconnect', () => {
-        console.log('User disconnected');
-    });
-});
-
-// Attach io to app and services
-app.set('socketio', io);
-setIO(io);
 
 // Start server locally
 if (process.env.NODE_ENV !== 'production') {
