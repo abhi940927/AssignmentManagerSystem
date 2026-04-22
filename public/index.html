@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment Manager | Login</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="auth-container">
+    <div class="auth-card glass">
+        <div id="login-form">
+            <h1 class="gradient-text">Welcome Back</h1>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">Login to manage your assignments</p>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="login-email" required placeholder="name@college.edu">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required placeholder="••••••••">
+                </div>
+                <button type="submit" id="login-btn">Sign In</button>
+            </form>
+            <p style="margin-top: 1.5rem; text-align: center; color: var(--text-muted);">
+                Don't have an account? <a href="#" onclick="toggleAuth()" style="color: var(--primary); text-decoration: none;">Register here</a>
+            </p>
+        </div>
+
+        <div id="register-form" style="display: none;">
+            <h1 class="gradient-text">Create Account</h1>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">Join the platform as student or faculty</p>
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="reg-name" required placeholder="John Doe">
+                </div>
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="reg-email" required placeholder="name@college.edu">
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" id="reg-dob" required>
+                </div>
+                <div class="form-group">
+                    <label>Choose Role</label>
+                    <select id="reg-role" required>
+                        <option value="Student">Student</option>
+                        <option value="Faculty">Faculty</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" required placeholder="••••••••">
+                </div>
+                <button type="submit" id="reg-btn">Create Account</button>
+            </form>
+            <p style="margin-top: 1.5rem; text-align: center; color: var(--text-muted);">
+                Already have an account? <a href="#" onclick="toggleAuth()" style="color: var(--primary); text-decoration: none;">Login here</a>
+            </p>
+        </div>
+    </div>
+
+    <div id="notification" class="notification-toast" style="display: none;"></div>
+
+    <script src="js/auth.js"></script>
+    <script>
+        function toggleAuth() {
+            const login = document.getElementById('login-form');
+            const register = document.getElementById('register-form');
+            if (login.style.display === 'none') {
+                login.style.display = 'block';
+                register.style.display = 'none';
+            } else {
+                login.style.display = 'none';
+                register.style.display = 'block';
+            }
+        }
+
+        function showNotification(msg) {
+            const nt = document.getElementById('notification');
+            nt.innerText = msg;
+            nt.style.display = 'block';
+            setTimeout(() => nt.style.display = 'none', 3000);
+        }
+    </script>
+</body>
+</html>

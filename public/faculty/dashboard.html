@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty Dashboard | Assignment Manager</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="dashboard-layout">
+    <aside class="sidebar glass">
+        <h2 class="gradient-text">Faculty.</h2>
+        <nav>
+            <a href="#" class="nav-item active"><i class="fas fa-chart-line"></i>&nbsp; Analytics</a>
+            <a href="#" class="nav-item" onclick="showSection('create')"><i class="fas fa-plus"></i>&nbsp; New Assignment</a>
+            <a href="#" class="nav-item" onclick="showSection('manage')"><i class="fas fa-folder"></i>&nbsp; Manage Submissions</a>
+            <a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i>&nbsp; Logout</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h1>Professor <span id="user-name">Faculty</span></h1>
+            <div id="socket-status" style="font-size: 0.8rem; color: var(--success);"><i class="fas fa-circle"></i> Live</div>
+        </header>
+
+        <!-- Analytics Section -->
+        <section id="analytics-section">
+            <h2 style="font-size: 1.25rem;">Submission Analytics</h2>
+            <div class="stats-grid" id="analytics-grid">
+                <!-- Analytics Cards -->
+            </div>
+        </section>
+
+        <!-- Create Assignment Section -->
+        <section id="create-section" style="display: none;">
+            <div class="glass" style="padding: 2rem; max-width: 600px;">
+                <h2>Create New Assignment</h2>
+                <form onsubmit="handleCreateAssignment(event)">
+                    <div class="form-group">
+                        <label>Assignment Title</label>
+                        <input type="text" id="as-title" required placeholder="e.g. Data Structures Project 1">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="as-desc" rows="4" required placeholder="Project details and submission rules..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Deadline</label>
+                        <input type="datetime-local" id="as-deadline" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Late Penalty (%) per day</label>
+                        <input type="number" id="as-penalty" value="10">
+                    </div>
+                    <button type="submit">Publish Assignment</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Manage Submissions Section -->
+        <section id="manage-section" style="display: none;">
+            <h2 style="font-size: 1.25rem;">Student Submissions</h2>
+            <div class="form-group" style="max-width: 300px;">
+                <label>Select Assignment</label>
+                <select id="as-selector" onchange="loadSubmissionsForAssignment(this.value)">
+                    <option value="">Choose...</option>
+                </select>
+            </div>
+            <div id="submissions-list">
+                 <!-- Submissions will be injected here -->
+            </div>
+        </section>
+    </main>
+
+    <div id="notification" class="notification-toast" style="display: none;"></div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        checkAuth('Faculty');
+        document.getElementById('user-name').innerText = localStorage.getItem('name');
+
+        const socket = io();
+        socket.emit('join', localStorage.getItem('userId'));
+
+        socket.on('new_submission', (data) => {
+            showNotification(`Alert: ${data.studentName} submitted for ${data.assignmentTitle}`);
+            loadAnalytics();
+        });
+
+        function showSection(id) {
+            ['analytics-section', 'create-section', 'manage-section'].forEach(s => {
+                document.getElementById(s).style.display = (s === id + '-section') ? 'block' : 'none';
+            });
+            if (id === 'manage') loadAssignmentOptions();
+        }
+
+        async function loadAnalytics() {
+            const res = await fetch('/api/assignments/analytics', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const analytics = await res.json();
+            const grid = document.getElementById('analytics-grid');
+            grid.innerHTML = analytics.map(a => `
+                <div class="stat-card glass">
+                    <p style="color: var(--text-muted); font-size: 0.8rem;">${a.title}</p>
+                    <div class="stat-value">${a.totalSubmissions}</div>
+                    <p style="font-size: 0.8rem;">
+                        <span style="color: var(--success)">On-time: ${a.onTime}</span> | 
+                        <span style="color: var(--danger)">Late: ${a.late}</span>
+                    </p>
+                </div>
+            `).join('');
+        }
+
+        async function handleCreateAssignment(e) {
+            e.preventDefault();
+            const title = document.getElementById('as-title').value;
+            const description = document.getElementById('as-desc').value;
+            const deadline = document.getElementById('as-deadline').value;
+            const latePenalty = document.getElementById('as-penalty').value;
+
+            const res = await fetch('/api/assignments', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ title, description, deadline, latePenalty })
+            });
+
+            if (res.ok) {
+                showNotification('Assignment published successfully!');
+                showSection('analytics');
+                loadAnalytics();
+            } else {
+                alert('Failed to publish assignment');
+            }
+        }
+
+        async function loadAssignmentOptions() {
+            const res = await fetch('/api/assignments', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const assignments = await res.json();
+            const selector = document.getElementById('as-selector');
+            selector.innerHTML = '<option value="">Choose...</option>' + 
+                assignments.map(a => `<option value="${a._id}">${a.title}</option>`).join('');
+        }
+
+        async function loadSubmissionsForAssignment(id) {
+            if (!id) return;
+            const res = await fetch(`/api/submissions/assignment/${id}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const submissions = await res.json();
+            const list = document.getElementById('submissions-list');
+            list.innerHTML = submissions.map(s => `
+                <div class="assignment-card glass">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3>${s.studentId.name}</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem;">${s.studentId.email}</p>
+                            <span class="tag ${s.status === 'On-time' ? 'tag-on-time' : 'tag-late'}">${s.status}</span>
+                        </div>
+                        <div style="text-align: right;">
+                             <a href="${s.fileUrl}" target="_blank" style="color: var(--primary); display: block; margin-bottom: 0.5rem;"><i class="fas fa-file-download"></i> View Submission</a>
+                             <input type="text" id="remark-${s._id}" placeholder="Enter remarks..." value="${s.remarks}" style="margin-bottom: 0.5rem; max-width: 200px;">
+                             <button onclick="saveRemarks('${s._id}')" style="width: auto; padding: 0.3rem 0.8rem; font-size: 0.8rem;">Save Remark</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('') || '<p style="margin-top: 1rem;">No submissions yet.</p>';
+        }
+
+        async function saveRemarks(id) {
+            const remarks = document.getElementById(`remark-${id}`).value;
+            const res = await fetch(`/api/submissions/${id}/remarks`, {
+                method: 'PATCH',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ remarks })
+            });
+
+            if (res.ok) {
+                showNotification('Remark saved and student notified!');
+            }
+        }
+
+        function showNotification(msg) {
+            const nt = document.getElementById('notification');
+            nt.innerText = msg;
+            nt.style.display = 'block';
+            setTimeout(() => nt.style.display = 'none', 5000);
+        }
+
+        loadAnalytics();
+    </script>
+</body>
+</html>

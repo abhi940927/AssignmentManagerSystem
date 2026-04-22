@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard | Assignment Manager</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="dashboard-layout">
+    <aside class="sidebar glass">
+        <h2 class="gradient-text">Assigned.</h2>
+        <nav>
+            <a href="#" class="nav-item active"><i class="fas fa-home"></i>&nbsp; Dashboard</a>
+            <a href="#" class="nav-item"><i class="fas fa-tasks"></i>&nbsp; My Submissions</a>
+            <a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i>&nbsp; Logout</a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h1>Hello, <span id="user-name">Student</span>!</h1>
+            <div id="socket-status" style="font-size: 0.8rem; color: var(--success);"><i class="fas fa-circle"></i> Live</div>
+        </header>
+
+        <section>
+            <h2 style="font-size: 1.25rem;">Upcoming Assignments</h2>
+            <div id="assignments-list">
+                <!-- Assignments will be injected here -->
+            </div>
+        </section>
+
+        <section style="margin-top: 3rem;">
+            <h2 style="font-size: 1.25rem;">My Submission History</h2>
+            <div id="submissions-list" class="glass" style="padding: 1rem;">
+                 <!-- Submissions will be injected here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Submission Modal -->
+    <div id="submit-modal" class="glass" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 2rem; width: 400px; z-index: 100;">
+        <h3>Submit Assignment</h3>
+        <p id="modal-assignment-title" style="margin-bottom: 1rem; color: var(--text-muted);"></p>
+        <form id="upload-form">
+            <input type="file" id="file-input" required style="margin-bottom: 1rem;">
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit">Upload</button>
+                <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+
+    <div id="notification" class="notification-toast" style="display: none;"></div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="../js/auth.js"></script>
+    <script>
+        checkAuth('Student');
+        document.getElementById('user-name').innerText = localStorage.getItem('name');
+
+        const socket = io();
+        socket.emit('join', localStorage.getItem('userId'));
+
+        socket.on('new_assignment', (data) => {
+            showNotification(`New Assignment: ${data.title}`);
+            loadAssignments();
+        });
+
+        socket.on('deadline_alert', (data) => {
+            showNotification(data.message);
+        });
+
+        socket.on('new_remark', (data) => {
+            showNotification(`Faculty added remarks to your submission!`);
+            loadSubmissions();
+        });
+
+        async function loadAssignments() {
+            const res = await fetch('/api/assignments', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const assignments = await res.json();
+            const list = document.getElementById('assignments-list');
+            list.innerHTML = assignments.map(a => `
+                <div class="assignment-card glass">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <h3>${a.title}</h3>
+                            <p style="color: var(--text-muted); margin-bottom: 1rem;">${a.description}</p>
+                            <p style="font-size: 0.8rem;"><i class="far fa-clock"></i> Deadline: ${new Date(a.deadline).toLocaleString()}</p>
+                        </div>
+                        <button onclick="openModal('${a._id}', '${a.title}')" style="width: auto; padding: 0.5rem 1rem;">Submit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadSubmissions() {
+            const res = await fetch('/api/submissions/my-submissions', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            });
+            const submissions = await res.json();
+            const list = document.getElementById('submissions-list');
+            list.innerHTML = submissions.map(s => `
+                <div style="border-bottom: 1px solid var(--border); padding: 1rem 0; display: flex; justify-content: space-between;">
+                    <div>
+                        <strong>${s.assignmentId.title}</strong>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">
+                           Status: <span class="tag ${s.status === 'On-time' ? 'tag-on-time' : 'tag-late'}">${s.status}</span> | 
+                           Submitted: ${new Date(s.submittedAt).toLocaleDateString()}
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 0.85rem; color: var(--secondary);">${s.remarks || 'No remarks yet'}</div>
+                        <a href="${s.fileUrl}" target="_blank" style="color: var(--primary); font-size: 0.8rem;">View File</a>
+                    </div>
+                </div>
+            `).join('') || '<p>No submissions found.</p>';
+        }
+
+        let currentAssignmentId = null;
+
+        function openModal(id, title) {
+            currentAssignmentId = id;
+            document.getElementById('modal-assignment-title').innerText = title;
+            document.getElementById('submit-modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('submit-modal').style.display = 'none';
+        }
+
+        document.getElementById('upload-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('file-input').files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch(`/api/submissions/${currentAssignmentId}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                body: formData
+            });
+
+            if (res.ok) {
+                showNotification('Submission uploaded successfully!');
+                closeModal();
+                loadSubmissions();
+            } else {
+                alert('Upload failed');
+            }
+        };
+
+        function showNotification(msg) {
+            const nt = document.getElementById('notification');
+            nt.innerText = msg;
+            nt.style.display = 'block';
+            setTimeout(() => nt.style.display = 'none', 5000);
+        }
+
+        loadAssignments();
+        loadSubmissions();
+    </script>
+</body>
+</html>
