@@ -38,8 +38,20 @@ app.use(express.json());
 
 // Ensure DB is connected for every request (crucial for Vercel)
 app.use(async (req, res, next) => {
-    await connectDB();
-    next();
+    try {
+        if (mongoose.connection.readyState < 1) {
+            if (!MONGO_URI || MONGO_URI.includes('localhost')) {
+                console.error('❌ Invalid MONGO_URI for production');
+                // Don't block the request here, let the route handle the DB failure
+            } else {
+                await connectDB();
+            }
+        }
+        next();
+    } catch (err) {
+        console.error('Middleware DB Error:', err);
+        next(); // Still proceed to let the route handle it or fail gracefully
+    }
 });
 
 // Serve static files

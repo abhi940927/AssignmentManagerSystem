@@ -53,7 +53,7 @@ async function handleRegister(e) {
         } else {
             const text = await response.text();
             console.error('Non-JSON response received:', text);
-            throw new Error('Server error: check Vercel logs for details.');
+            throw new Error(`Server error (${response.status}): check Vercel logs for details.`);
         }
 
         if (response.ok) {
