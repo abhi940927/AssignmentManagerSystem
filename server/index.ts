@@ -15,44 +15,33 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-// Defensive Socket.io initialization for Vercel
+// Initialize Socket.io defensively
 let io: any;
-if (process.env.NODE_ENV !== 'production' || process.env.VERCEL) {
-    try {
-        io = new Server(httpServer, {
-            cors: { origin: '*' }
-        });
-        
-        io.on('connection', (socket: any) => {
-            console.log('User connected:', socket.id);
-            socket.on('join', (userId: string) => {
-                socket.join(userId);
-            });
-            socket.on('disconnect', () => {
-                console.log('User disconnected');
-            });
-        });
+try {
+    io = new Server(httpServer, {
+        cors: { origin: '*' }
+    });
+    
+    io.on('connection', (socket: any) => {
+        socket.on('join', (userId: string) => socket.join(userId));
+    });
 
-        app.set('socketio', io);
-        setIO(io);
-    } catch (err) {
-        console.error('Socket.io initialization skipped or failed:', err);
-    }
+    app.set('socketio', io);
+    setIO(io);
+} catch (err) {
+    console.error('Socket initialization warning:', err);
 }
 
-const PORT = process.env.PORT || 8080;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/assignment_db';
 
 // DB Connection Utility
 const connectDB = async () => {
     if (mongoose.connection.readyState >= 1) return;
     try {
-        if (!MONGO_URI) throw new Error('MONGO_URI is not defined');
         await mongoose.connect(MONGO_URI);
         console.log('✅ MongoDB connected');
-    } catch (err) {
-        console.error('❌ MongoDB connection error:', err);
-        throw err; // Rethrow to catch in middleware
+    } catch (err: any) {
+        console.error('❌ MongoDB Connection Error:', err.message);
     }
 };
 
@@ -60,29 +49,33 @@ const connectDB = async () => {
 app.use(cors());
 app.use(express.json());
 
-// Ensure DB is connected for every request (crucial for Vercel)
-app.use(async (req, res, next) => {
-    try {
-        await connectDB();
-        next();
-    } catch (err: any) {
-        console.error('Database middleware error:', err.message);
-        // If DB fails, we still let the request through but routes will fail gracefully
-        next();
-    }
+// Ensure DB connection for every API request
+app.use('/api', async (req, res, next) => {
+    await connectDB();
+    next();
 });
 
-// Serve static files
-app.use(express.static(path.join(__dirname, '../public')));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Health check
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        env: process.env.NODE_ENV
+    });
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/submissions', submissionRoutes);
 
-// Start server locally
-if (process.env.NODE_ENV !== 'production') {
+// Static files
+app.use(express.static(path.join(__dirname, '../public')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Local development listener
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+    const PORT = process.env.PORT || 8080;
     httpServer.listen(PORT, () => {
         console.log(`🚀 Server running on http://localhost:${PORT}`);
     });
