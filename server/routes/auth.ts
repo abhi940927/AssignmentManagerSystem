@@ -18,11 +18,16 @@ router.post('/register', async (req: any, res: any) => {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const userDob = new Date(dob);
+        if (isNaN(userDob.getTime())) {
+            return res.status(400).json({ error: 'Invalid date of birth' });
+        }
+
         const user = new User({ 
             name, 
             email, 
             password: hashedPassword, 
-            dob: new Date(dob), // Ensure it's a Date object
+            dob: userDob,
             role 
         });
         
